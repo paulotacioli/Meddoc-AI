@@ -1,0 +1,111 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: meddoc_postgres
+    command: postgres -c password_encryption=md5
+    environment:
+      POSTGRES_DB: meddoc
+      POSTGRES_USER: meddoc
+      POSTGRES_PASSWORD: meddoc123
+      POSTGRES_HOST_AUTH_METHOD: trust
+      
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
+      - ./database/seeds:/docker-entrypoint-initdb.d/seeds
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U meddoc"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mongodb:
+    image: mongo:7-jammy
+    container_name: meddoc_mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: meddoc
+      MONGO_INITDB_ROOT_PASSWORD: meddoc123
+      MONGO_INITDB_DATABASE: meddoc_docs
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - "27017:27017"
+
+  redis:
+    image: redis:7-alpine
+    container_name: meddoc_redis
+    command: redis-server --requirepass meddoc123
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: meddoc_backend
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://meddoc:meddoc123@postgres:5432/meddoc
+      MONGO_URL: mongodb://meddoc:meddoc123@mongodb:27017/meddoc_docs
+      REDIS_URL: redis://:meddoc123@redis:6379
+      JWT_SECRET: 401914d202f5e41aac5e081f3a2c9ea166b487c0b0a43de7524181e63defae9af0499f178cf582c1ae722b4843852fbb5bd9f147c74085dba4a354af7048d2c0
+      ENCRYPTION_KEY: c1963323e0e79e0d8a7dd4a4f8de77e197dfad809390374c6f29a1fce11e1bd1
+      OPENAI_API_KEY: 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
+      ANTHROPIC_API_KEY: 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
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_REGION: sa-east-1
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_started
+      redis:
+        condition: service_started
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./backend/src:/app/src
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: meddoc_frontend
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:3001}
+      VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:3001}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+  nginx:
+    image: nginx:alpine
+    container_name: meddoc_nginx
+    volumes:
+      - ./infra/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - frontend
+      - backend
+
+volumes:
+  postgres_data:
+  mongo_data:
+  redis_data:
