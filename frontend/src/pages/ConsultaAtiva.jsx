@@ -65,12 +65,19 @@ export default function ConsultaAtiva() {
   }, [prontuarioReady, prontuarioId, consultationId, navigate]);
 
   const handleStart = async () => {
-    try {
-      await startRecording();
-    } catch (err) {
-      toast.error('Não foi possível acessar o microfone. Verifique as permissões.');
+  try {
+    await startRecording();
+  } catch (err) {
+    console.error('Erro ao iniciar consulta:', err);
+    if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
+      toast.error('Permissão de microfone negada. Clique no cadeado na barra do Chrome e permita o microfone.');
+    } else if (err?.name === 'NotFoundError') {
+      toast.error('Microfone não encontrado. Verifique se está conectado.');
+    } else {
+      toast.error(`Erro ao iniciar: ${err?.message || 'Tente novamente.'}`);
     }
-  };
+  }
+};
 
   const handleStop = () => {
     if (!window.confirm('Encerrar a consulta e gerar o prontuário?')) return;

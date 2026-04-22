@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Mic, Clock, CheckCircle2, AlertCircle, Users, BarChart2, Plus, Search, Loader2 } from 'lucide-react';
+import { Mic, Clock, CheckCircle2, AlertCircle, Users, BarChart2, Plus, Search, Loader2, X } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import toast from 'react-hot-toast';
 import api from '../services/api';

@@ -1,64 +1,61 @@
-// ── useConsulta hook ──────────────────────────────────────────
-// Gerencia: gravação de áudio, envio via WS, recebimento de transcrição ao vivo
-
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useAuthStore } from '../store/authStore';
 
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:3001';
-const CHUNK_INTERVAL_MS = 2500; // enviar chunk de áudio a cada 2.5s
 
 export function useConsulta(consultationId) {
-  const [status, setStatus]             = useState('idle'); // idle | connecting | recording | transcribing | done | error
-  const [transcript, setTranscript]     = useState('');
-  const [segments, setSegments]         = useState([]);
+  const [status, setStatus]                   = useState('idle');
+  const [transcript, setTranscript]           = useState('');
+  const [segments, setSegments]               = useState([]);
   const [prontuarioReady, setProntuarioReady] = useState(false);
-  const [prontuarioId, setProntuarioId] = useState(null);
-  const [wsConnected, setWsConnected]   = useState(false);
+  const [prontuarioId, setProntuarioId]       = useState(null);
+  const [wsConnected, setWsConnected]         = useState(false);
 
-  const wsRef           = useRef(null);
-  const mediaRecorderRef = useRef(null);
-  const streamRef       = useRef(null);
-  const chunkIntervalRef = useRef(null);
-  const audioChunksRef  = useRef([]);
-
+  const wsRef          = useRef(null);
+  const recognitionRef = useRef(null);
   const token = useAuthStore(s => s.accessToken);
+  const user  = useAuthStore(s => s.user);
 
   // ── CONECTAR WEBSOCKET ──────────────────────────────────────
   const connectWS = useCallback(() => {
     return new Promise((resolve, reject) => {
+
+      // Garantir que o token existe antes de conectar
+      const currentToken = useAuthStore.getState().accessToken;
+      if (!currentToken) {
+        reject(new Error('Sessão expirada. Faça login novamente.'));
+        return;
+      }
+
       const ws = new WebSocket(`${WS_URL}/ws/consulta/${consultationId}`);
       wsRef.current = ws;
 
-      ws.onopen = () => {
-        // Autenticar
-        ws.send(JSON.stringify({ type: 'auth', token }));
-      };
+      ws.onopen = async () => {
+        // Tentar renovar o token antes de autenticar
+        let currentToken = useAuthStore.getState().accessToken
+        try {
+          const freshToken = await useAuthStore.getState().refreshAccess()
+          if (freshToken) currentToken = freshToken
+        } catch {}
+        ws.send(JSON.stringify({ type: 'auth', token: currentToken }))
+      }
 
       ws.onmessage = (evt) => {
         const msg = JSON.parse(evt.data);
-
         switch (msg.type) {
           case 'auth_ok':
             setWsConnected(true);
             setStatus('recording');
             resolve();
             break;
-
-          case 'transcript_segment':
-            setSegments(prev => [...prev, msg.segment]);
-            setTranscript(prev => prev + ' ' + msg.segment.text);
-            break;
-
           case 'transcription_ready':
             setStatus('generating');
             break;
-
           case 'prontuario_ready':
             setProntuarioId(msg.prontuarioId);
             setProntuarioReady(true);
             setStatus('done');
             break;
-
           case 'error':
             setStatus('error');
             reject(new Error(msg.message));
@@ -66,79 +63,96 @@ export function useConsulta(consultationId) {
         }
       };
 
-      ws.onclose = () => {
-        setWsConnected(false);
-      };
-
-      ws.onerror = (err) => {
-        setStatus('error');
-        reject(err);
-      };
+      ws.onclose = () => setWsConnected(false);
+      ws.onerror = (err) => { setStatus('error'); reject(err); };
     });
-  }, [consultationId, token]);
+  }, [consultationId]);
 
-  // ── INICIAR GRAVAÇÃO ────────────────────────────────────────
+  // ── INICIAR WEB SPEECH API ──────────────────────────────────
+  const startSpeechRecognition = useCallback(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('Seu navegador não suporta transcrição em tempo real. Use o Google Chrome.');
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
+
+    recognition.lang           = 'pt-BR';
+    recognition.continuous     = true;   // não para após silêncio
+    recognition.interimResults = true;   // mostra texto enquanto fala
+    recognition.maxAlternatives = 1;
+
+    let finalTranscript = '';
+
+    recognition.onresult = (event) => {
+      let interimText = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (result.isFinal) {
+          const text = result[0].transcript.trim();
+          finalTranscript += ' ' + text;
+
+          // Atualizar estado
+          setSegments(prev => [...prev, { text, timestamp: Date.now() }]);
+          setTranscript(prev => prev + ' ' + text);
+
+          // Enviar ao backend via WebSocket
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({
+              type: 'transcript_text',
+              text,
+              consultationId,
+            }));
+          }
+        } else {
+          interimText += result[0].transcript;
+        }
+      }
+    };
+
+    recognition.onerror = (event) => {
+      // Ignorar erros de "no-speech" — acontece em silêncio
+      if (event.error === 'no-speech') return;
+      console.error('Speech recognition error:', event.error);
+    };
+
+    recognition.onend = () => {
+      // Reiniciar automaticamente se ainda estiver gravando
+      if (recognitionRef.current && status === 'recording') {
+        try { recognition.start(); } catch {}
+      }
+    };
+
+    recognition.start();
+  }, [consultationId, status]);
+
+  // ── INICIAR CONSULTA ────────────────────────────────────────
   const startRecording = useCallback(async () => {
     try {
       setStatus('connecting');
-
-      // Solicitar microfone
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 }
-      });
-      streamRef.current = stream;
-
-      // Conectar WS e autenticar
       await connectWS();
-
-      // Configurar MediaRecorder para WebM/Opus
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : 'audio/webm';
-
-      const mediaRecorder = new MediaRecorder(stream, { mimeType, audioBitsPerSecond: 32000 });
-      mediaRecorderRef.current = mediaRecorder;
-
-      mediaRecorder.ondataavailable = (evt) => {
-        if (evt.data.size > 0) {
-          audioChunksRef.current.push(evt.data);
-        }
-      };
-
-      mediaRecorder.start(100); // coleta a cada 100ms
-
-      // Enviar chunks ao WS a cada CHUNK_INTERVAL_MS
-      chunkIntervalRef.current = setInterval(() => {
-        if (audioChunksRef.current.length === 0) return;
-        const blob = new Blob(audioChunksRef.current, { type: mimeType });
-        audioChunksRef.current = [];
-        blob.arrayBuffer().then(buf => {
-          if (wsRef.current?.readyState === WebSocket.OPEN) {
-            wsRef.current.send(buf);
-          }
-        });
-      }, CHUNK_INTERVAL_MS);
-
+      startSpeechRecognition();
     } catch (err) {
       setStatus('error');
       throw err;
     }
-  }, [connectWS]);
+  }, [connectWS, startSpeechRecognition]);
 
-  // ── ENCERRAR GRAVAÇÃO ───────────────────────────────────────
+  // ── ENCERRAR CONSULTA ───────────────────────────────────────
   const stopRecording = useCallback(() => {
-    clearInterval(chunkIntervalRef.current);
-
-    if (mediaRecorderRef.current?.state !== 'inactive') {
-      mediaRecorderRef.current?.stop();
+    // Parar reconhecimento de fala
+    if (recognitionRef.current) {
+      recognitionRef.current.onend = null; // evitar restart automático
+      try { recognitionRef.current.stop(); } catch {}
+      recognitionRef.current = null;
     }
-
-    // Parar tracks de áudio
-    streamRef.current?.getTracks().forEach(t => t.stop());
 
     setStatus('transcribing');
 
-    // Enviar sinal de fim ao WS
+    // Avisar backend que a gravação encerrou
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({ type: 'recording_ended' }));
     }
@@ -147,8 +161,10 @@ export function useConsulta(consultationId) {
   // Cleanup ao desmontar
   useEffect(() => {
     return () => {
-      clearInterval(chunkIntervalRef.current);
-      streamRef.current?.getTracks().forEach(t => t.stop());
+      if (recognitionRef.current) {
+        recognitionRef.current.onend = null;
+        try { recognitionRef.current.stop(); } catch {}
+      }
       wsRef.current?.close();
     };
   }, []);
@@ -163,13 +179,8 @@ export function useConsulta(consultationId) {
   }, [wsConnected]);
 
   return {
-    status,
-    transcript,
-    segments,
-    wsConnected,
-    prontuarioReady,
-    prontuarioId,
-    startRecording,
-    stopRecording,
+    status, transcript, segments,
+    wsConnected, prontuarioReady, prontuarioId,
+    startRecording, stopRecording,
   };
 }

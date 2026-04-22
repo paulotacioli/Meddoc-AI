@@ -105,7 +105,30 @@ router.post('/:id/end', authenticate, async (req, res, next) => {
     );
 
     // Pipeline assíncrona: Whisper → LLM → notificar médico via WS
-    setImmediate(() => processPipeline(id, audioS3Key, req.user).catch(logger.error));
+    // Pipeline assíncrona: usar transcript já coletado pelo WS
+    const consultationId = id // ← adicionar esta linha ANTES do setImmediate
+setImmediate(async () => {
+  try {
+    const consultResult = await queryWithTenant(req.user.clinicId,
+      'SELECT * FROM consultations WHERE id = $1', [consultationId]
+    )
+    const consult = consultResult.rows[0]
+
+    if (consult.transcript_raw && consult.transcript_raw.trim().length > 10) {
+      await queryWithTenant(req.user.clinicId,
+        `UPDATE consultations SET status='generating' WHERE id=$1`, [consultationId]
+      )
+      const { emitToConsultation } = require('../consultations/consulta.ws')
+      emitToConsultation(consultationId, {
+        type: 'transcription_ready',
+        consultationId,
+      })
+      await processPipeline(consultationId, null, req.user)
+    } else {
+      await processPipeline(consultationId, audioS3Key, req.user)
+    }
+  } catch (err) { logger.error('Pipeline error:', err) }
+})
 
     res.json({ message: 'Consulta encerrada. Gerando prontuário...', consultationId: id });
   } catch (err) { next(err); }
@@ -140,62 +163,86 @@ router.get('/:id', authenticate, async (req, res, next) => {
 // ── PIPELINE ASSÍNCRONA ───────────────────────────────────────
 async function processPipeline(consultationId, audioS3Key, user) {
   try {
-    logger.info(`Pipeline iniciada para consulta ${consultationId}`);
+    logger.info(`Pipeline iniciada para consulta ${consultationId}`)
 
-    // 1. Transcrição com Whisper
-    const { transcript, diarized } = await transcriptionService.transcribe(audioS3Key);
+    // Buscar transcrição já salva pelo WebSocket
+    const consultResult = await queryWithTenant(user.clinicId,
+      'SELECT * FROM consultations WHERE id = $1', [consultationId]
+    )
+    const consult = consultResult.rows[0]
+
+    let transcript = consult.transcript_raw || ''
+    let diarized   = consult.transcript_diarized || []
+
+    // Se não tem transcrição do WS, tenta pelo S3
+    if (!transcript || transcript.trim().length < 10) {
+      logger.info(`Sem transcrição do WS — tentando S3`)
+      const result = await transcriptionService.transcribe(audioS3Key)
+      transcript = result.transcript
+      diarized   = result.diarized
+
+      if (transcript) {
+        await queryWithTenant(user.clinicId,
+          `UPDATE consultations SET transcript_raw=$1, transcript_diarized=$2 WHERE id=$3`,
+          [transcript, JSON.stringify(diarized), consultationId]
+        )
+      }
+    }
+
+    // Se ainda não tem transcrição, avisar e criar prontuário em branco
+    if (!transcript || transcript.trim().length < 5) {
+      logger.warn(`Consulta ${consultationId} sem transcrição — gerando prontuário vazio`)
+      transcript = 'Transcrição não disponível para esta consulta.'
+    }
 
     await queryWithTenant(user.clinicId,
-      `UPDATE consultations SET
-         status='generating', transcript_raw=$1, transcript_diarized=$2
-       WHERE id=$3`,
-      [transcript, JSON.stringify(diarized), consultationId]
-    );
+      `UPDATE consultations SET status='generating' WHERE id=$1`, [consultationId]
+    )
 
     emitToClinic(user.clinicId, `consulta:${consultationId}`, {
-      event: 'transcription_ready',
-      consultationId
-    });
+      event: 'transcription_ready', consultationId
+    })
 
-    // 2. Gerar prontuário com LLM
-    const consultation = await queryWithTenant(user.clinicId,
-      'SELECT * FROM consultations WHERE id = $1', [consultationId]
-    );
-    const template = await query(
-      'SELECT * FROM prontuario_templates WHERE id = $1',
-      [consultation.rows[0].template_id]
-    );
+    // Buscar template
+    const template = consult.template_id
+      ? (await query('SELECT * FROM prontuario_templates WHERE id=$1', [consult.template_id])).rows[0]
+      : null
 
     const prontuario = await prontuarioService.generate({
       consultationId,
-      clinicId: user.clinicId,
-      patientId: consultation.rows[0].patient_id,
-      doctorId: user.userId,
-      template: template.rows[0],
+      clinicId:  user.clinicId,
+      patientId: consult.patient_id,
+      doctorId:  user.userId,
+      template,
       transcript,
       diarized
-    });
+    })
 
-    // 3. Marcar consulta como aguardando revisão
     await queryWithTenant(user.clinicId,
-      `UPDATE consultations SET status='review' WHERE id=$1`,
-      [consultationId]
-    );
+      `UPDATE consultations SET status='review' WHERE id=$1`, [consultationId]
+    )
 
-    // 4. Notificar médico via WebSocket
-    emitToClinic(user.clinicId, `consulta:${consultationId}`, {
-      event: 'prontuario_ready',
-      consultationId,
-      prontuarioId: prontuario._id
-    });
+    // Emitir via WebSocket direto para a sessão ativa
+    const { emitToConsultation } = require('../consultations/consulta.ws')
+      emitToConsultation(consultationId, {
+        type: 'prontuario_ready',
+        consultationId,
+        prontuarioId: prontuario._id
+      })
 
-    logger.info(`Pipeline concluída para consulta ${consultationId}`);
+      // Também emitir via realtime para outras abas
+      emitToClinic(user.clinicId, `consulta:${consultationId}`, {
+        event: 'prontuario_ready',
+        consultationId,
+        prontuarioId: prontuario._id
+    })
+
+    logger.info(`Pipeline concluída para consulta ${consultationId}`)
   } catch (err) {
-    logger.error(`Pipeline falhou para ${consultationId}:`, err);
+    logger.error(`Pipeline falhou para ${consultationId}:`, err)
     await query(
-      `UPDATE consultations SET status='review', metadata=jsonb_set(metadata,'{pipeline_error}','true') WHERE id=$1`,
-      [consultationId]
-    );
+      `UPDATE consultations SET status='review' WHERE id=$1`, [consultationId]
+    )
   }
 }
 

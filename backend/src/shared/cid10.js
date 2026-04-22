@@ -8,7 +8,7 @@ const cid10Service = {
       const Anthropic = require('@anthropic-ai/sdk')
       const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
       const msg = await client.messages.create({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 300,
         messages: [{
           role: 'user',

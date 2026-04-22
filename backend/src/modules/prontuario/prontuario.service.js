@@ -64,7 +64,7 @@ async function generate({ consultationId, clinicId, patientId, doctorId, templat
     medications,
     status: 'review',
     aiMetadata: {
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-haiku-4-5-20251001',
       generatedAt: new Date(),
     }
   });
@@ -105,7 +105,7 @@ Responda APENAS com o conteúdo da seção, sem título, sem formatação extra.
 
   try {
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 800,
       messages: [{ role: 'user', content: userPrompt }],
       system: systemPrompt,
@@ -197,7 +197,7 @@ async function extractMedications(transcript) {
   if (!transcript || transcript.length < 50) return [];
   try {
     const msg = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 400,
       messages: [{
         role: 'user',
