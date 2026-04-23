@@ -35,11 +35,13 @@ export default function Dashboard() {
     queryFn: () => api.get('/clinics/templates').then(r => r.data),
   });
 
+  const [patientInputFocused, setPatientInputFocused] = useState(false);
+
   // Busca de pacientes
   const { data: patients } = useQuery({
     queryKey: ['patients-search', patientSearch],
-    queryFn: () => api.get(`/patients?search=${patientSearch}&limit=8`).then(r => r.data),
-    enabled: patientSearch.length >= 2,
+    queryFn: () => api.get(`/patients?search=${patientSearch}&limit=3`).then(r => r.data),
+    enabled: showNewConsulta && !selectedPatient,
   });
 
   // Iniciar nova consulta
@@ -182,6 +184,8 @@ export default function Dashboard() {
                     type="text"
                     value={patientSearch}
                     onChange={e => { setPatientSearch(e.target.value); setSelectedPatient(null); }}
+                    onFocus={() => setPatientInputFocused(true)}
+                    onBlur={() => setTimeout(() => setPatientInputFocused(false), 150)}
                     placeholder="Buscar por nome ou CPF..."
                     className="w-full pl-9 pr-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
                   />
@@ -192,7 +196,7 @@ export default function Dashboard() {
                     <button onClick={() => setSelectedPatient(null)} className="text-blue-400 hover:text-blue-600"><X size={13}/></button>
                   </div>
                 )}
-                {!selectedPatient && patients?.data?.length > 0 && (
+                {!selectedPatient && patientInputFocused && patients?.data?.length > 0 && (
                   <div className="mt-1 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
                     {patients.data.map(p => (
                       <button

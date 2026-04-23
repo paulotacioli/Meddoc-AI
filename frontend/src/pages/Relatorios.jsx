@@ -62,7 +62,7 @@ export default function Relatorios() {
           {[
             { label: 'Prontuários gerados',    value: aiUsage.total_generated },
             { label: 'Aprovados sem edição',   value: aiUsage.approved_without_edit },
-            { label: 'Taxa sem edição',        value: `${aiUsage.approval_no_edit_pct}%` },
+            { label: 'Taxa sem edição',        value: aiUsage.approval_no_edit_pct != null ? `${aiUsage.approval_no_edit_pct}%` : '—' },
             { label: 'Regenerações solicitadas', value: aiUsage.regenerations },
           ].map(k => (
             <div key={k.label} className="bg-white rounded-xl border border-gray-100 p-5">

@@ -103,7 +103,7 @@ router.get('/ai-usage', authenticate, requireRole(['admin','gestor']), async (re
 
     const result = await queryWithTenant(clinicId,
       `SELECT
-         COUNT(*) AS total_generated,
+         COUNT(*) FILTER (WHERE pv.action = 'generated')   AS total_generated,
          COUNT(*) FILTER (WHERE pv.action = 'approved' AND edit_count.cnt = 0) AS approved_without_edit,
          COUNT(*) FILTER (WHERE pv.action = 'regenerated') AS regenerations,
          ROUND(100.0 * COUNT(*) FILTER (WHERE pv.action = 'approved' AND edit_count.cnt = 0)
@@ -115,7 +115,7 @@ router.get('/ai-usage', authenticate, requireRole(['admin','gestor']), async (re
        ) edit_count ON true
        WHERE pv.consultation_id IN (
          SELECT id FROM consultations WHERE clinic_id = $1
-       ) AND pv.action = 'generated'`,
+       )`,
       [clinicId]
     );
 

@@ -26,17 +26,26 @@ async function generate({ consultationId, clinicId, patientId, doctorId, templat
   const templateStructure = template?.structure || getDefaultSOAPStructure();
   const fields = {};
 
+  const toKey = (label, index) => {
+    if (!label) return `campo_${index + 1}`;
+    const slug = label.normalize('NFD')
+      .split('').filter(c => c.charCodeAt(0) < 768 || c.charCodeAt(0) > 879).join('')
+      .toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    return slug || `campo_${index + 1}`;
+  };
+
   // Gerar cada seção do template em paralelo
-  const sectionPromises = templateStructure.map(async (section) => {
+  const sectionPromises = templateStructure.map(async (section, index) => {
+    const key = section.key || toKey(section.label, index);
     const content = await generateSection({
-      sectionKey:   section.key,
-      sectionLabel: section.label,
-      aiPrompt:     section.ai_prompt,
+      sectionKey:   key,
+      sectionLabel: section.label || key,
+      aiPrompt:     section.ai_prompt || `Preencha a seção "${section.label || key}" com base na transcrição da consulta médica.`,
       transcript,
       diarized,
       templateType: template?.type || 'SOAP',
     });
-    return { key: section.key, content };
+    return { key, content };
   });
 
   const sections = await Promise.all(sectionPromises);
@@ -166,6 +175,11 @@ async function regenerateSection({ prontuarioId, sectionKey, consultationId, cli
 
 // ── APROVAR PRONTUÁRIO ────────────────────────────────────────
 async function approve({ prontuarioId, consultationId, clinicId, userId, editedFields }) {
+  const original = await Prontuario.findById(prontuarioId);
+
+  const wasEdited = editedFields &&
+    JSON.stringify(editedFields) !== JSON.stringify(original.fields);
+
   const updateData = { status: 'approved' };
   if (editedFields) updateData.fields = editedFields;
 
@@ -175,6 +189,15 @@ async function approve({ prontuarioId, consultationId, clinicId, userId, editedF
     `UPDATE consultations SET status = 'approved' WHERE id = $1`,
     [consultationId]
   );
+
+  if (wasEdited) {
+    await queryWithTenant(clinicId,
+      `INSERT INTO prontuario_versions (consultation_id, version, mongo_doc_id, created_by, action)
+       VALUES ($1, $2, $3, $4, 'edited')`,
+      [consultationId, prontuario.version, prontuario._id.toString(), userId]
+    );
+  }
+
   await queryWithTenant(clinicId,
     `INSERT INTO prontuario_versions (consultation_id, version, mongo_doc_id, created_by, action)
      VALUES ($1, $2, $3, $4, 'approved')`,

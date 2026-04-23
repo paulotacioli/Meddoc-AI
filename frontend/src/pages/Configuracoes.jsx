@@ -278,20 +278,93 @@ function AuditoriaConfig() {
 }
 
 // ── TEMPLATES ─────────────────────────────────────────────────
+const TEMPLATE_TYPES = [
+  { value: 'SOAP',      label: 'SOAP' },
+  { value: 'anamnese',  label: 'Anamnese' },
+  { value: 'retorno',   label: 'Retorno' },
+  { value: 'urgencia',  label: 'Urgência' },
+  { value: 'livre',     label: 'Livre' },
+];
+
 function TemplatesConfig() {
+  const qc = useQueryClient();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing]     = useState(null);
+  const [form, setForm]           = useState({ name: '', type: 'SOAP', specialty: '', fields: [''] });
+
   const { data } = useQuery({
     queryKey: ['templates'],
     queryFn: () => api.get('/clinics/templates').then(r => r.data),
   });
 
+  const openNew = () => {
+    setEditing(null);
+    setForm({ name: '', type: 'SOAP', specialty: '', fields: [''] });
+    setModalOpen(true);
+  };
+
+  const openEdit = (t) => {
+    setEditing(t);
+    setForm({
+      name: t.name,
+      type: t.type,
+      specialty: t.specialty || '',
+      fields: t.structure?.map(f => f.label) || [''],
+    });
+    setModalOpen(true);
+  };
+
+  const create = useMutation({
+    mutationFn: (payload) => api.post('/clinics/templates', payload),
+    onSuccess: () => { toast.success('Template criado!'); qc.invalidateQueries(['templates']); setModalOpen(false); },
+    onError: () => toast.error('Erro ao criar template'),
+  });
+
+  const update = useMutation({
+    mutationFn: ({ id, payload }) => api.put(`/clinics/templates/${id}`, payload),
+    onSuccess: () => { toast.success('Template atualizado!'); qc.invalidateQueries(['templates']); setModalOpen(false); },
+    onError: () => toast.error('Erro ao atualizar template'),
+  });
+
+  const remove = useMutation({
+    mutationFn: (id) => api.delete(`/clinics/templates/${id}`),
+    onSuccess: () => { toast.success('Template removido!'); qc.invalidateQueries(['templates']); },
+    onError: () => toast.error('Erro ao remover template'),
+  });
+
+  const toKey = (label) => {
+    const slug = label.normalize('NFD')
+      .split('').filter(c => c.charCodeAt(0) < 768 || c.charCodeAt(0) > 879).join('')
+      .toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    return slug || `campo`;
+  };
+
+  const handleSave = () => {
+    const structure = form.fields.filter(f => f.trim()).map(label => ({
+      key:       toKey(label),
+      label,
+      required:  false,
+      ai_prompt: `Preencha a seção "${label}" com base na transcrição da consulta médica.`,
+    }));
+    const payload = { name: form.name, type: form.type, specialty: form.specialty || null, structure };
+    editing ? update.mutate({ id: editing.id, payload }) : create.mutate(payload);
+  };
+
+  const addField    = () => setForm(f => ({ ...f, fields: [...f.fields, ''] }));
+  const removeField = (i) => setForm(f => ({ ...f, fields: f.fields.filter((_, idx) => idx !== i) }));
+  const updateField = (i, val) => setForm(f => ({ ...f, fields: f.fields.map((v, idx) => idx === i ? val : v) }));
+
+  const isSaving = create.isPending || update.isPending;
+
   return (
     <div className="max-w-2xl space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-gray-900">Templates de Prontuário</h2>
-        <button className="flex items-center gap-2 bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-semibold">
+        <button onClick={openNew} className="flex items-center gap-2 bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-semibold">
           <Plus size={14}/> Novo template
         </button>
       </div>
+
       <div className="space-y-3">
         {(data?.data || []).map(t => (
           <div key={t.id} className="bg-white rounded-xl border border-gray-100 p-4">
@@ -301,15 +374,82 @@ function TemplatesConfig() {
                 <span className="ml-2 text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{t.type}</span>
                 {t.is_default && <span className="ml-1 text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">Padrão</span>}
               </div>
-              <div className="flex gap-2">
-                <button className="text-xs text-blue-600 hover:underline">Editar</button>
-                {!t.is_default && <button className="text-xs text-red-500 hover:underline">Remover</button>}
-              </div>
+              {!t.is_default && (
+                <div className="flex gap-2">
+                  <button onClick={() => openEdit(t)} className="text-xs text-blue-600 hover:underline">Editar</button>
+                  <button onClick={() => remove.mutate(t.id)} className="text-xs text-red-500 hover:underline">Remover</button>
+                </div>
+              )}
             </div>
             <p className="text-xs text-gray-400 mt-1">{t.structure?.length} campos</p>
           </div>
         ))}
       </div>
+
+      {modalOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setModalOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-900 mb-4">{editing ? 'Editar template' : 'Novo template'}</h3>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Nome</label>
+                <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="Ex: Consulta Cardiológica"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Tipo</label>
+                <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200">
+                  {TEMPLATE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Especialidade <span className="font-normal text-gray-400">(opcional)</span></label>
+                <input value={form.specialty} onChange={e => setForm(f => ({ ...f, specialty: e.target.value }))}
+                  placeholder="Ex: Hemodinâmica"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-2">Campos do prontuário</label>
+                <div className="space-y-2">
+                  {form.fields.map((field, i) => (
+                    <div key={i} className="flex gap-2">
+                      <input value={field} onChange={e => updateField(i, e.target.value)}
+                        placeholder={`Campo ${i + 1}`}
+                        className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+                      {form.fields.length > 1 && (
+                        <button onClick={() => removeField(i)} className="text-red-400 hover:text-red-600 px-1">
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <button onClick={addField} className="mt-2 text-xs text-blue-600 hover:underline flex items-center gap-1">
+                  <Plus size={12} /> Adicionar campo
+                </button>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6 justify-end">
+              <button onClick={() => setModalOpen(false)}
+                className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">
+                Cancelar
+              </button>
+              <button onClick={handleSave} disabled={!form.name || isSaving}
+                className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-lg font-semibold disabled:opacity-50">
+                {isSaving && <Loader2 size={14} className="animate-spin" />}
+                {editing ? 'Salvar alterações' : 'Criar template'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

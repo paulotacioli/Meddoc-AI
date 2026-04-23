@@ -48,16 +48,16 @@ export default function PacienteDetalhe() {
         </div>
         <div className="flex-1">
           <h1 className="text-xl font-bold text-gray-900">{patient?.name}</h1>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+          <div className="flex flex-col gap-1 mt-3">
             {[
-              { label: 'E-mail',    value: patient?.email },
-              { label: 'Telefone',  value: patient?.phone },
-              { label: 'Convênio',  value: patient?.health_plan },
-              { label: 'Nascimento',value: patient?.birth_date ? new Date(patient.birth_date).toLocaleDateString('pt-BR') : null },
+              { label: 'E-mail',     value: patient?.email },
+              { label: 'Telefone',   value: patient?.phone },
+              { label: 'Nascimento', value: patient?.birth_date ? new Date(patient.birth_date).toLocaleDateString('pt-BR') : null },
+              { label: 'Convênio',   value: patient?.health_plan },
             ].filter(f => f.value).map(f => (
-              <div key={f.label}>
-                <div className="text-xs text-gray-400 font-medium">{f.label}</div>
-                <div className="text-sm text-gray-800 mt-0.5">{f.value}</div>
+              <div key={f.label} className="flex items-baseline gap-2 min-w-0">
+                <span className="text-xs text-gray-400 font-medium w-20 flex-shrink-0">{f.label}</span>
+                <span className="text-sm text-gray-800 truncate" title={f.value}>{f.value}</span>
               </div>
             ))}
           </div>

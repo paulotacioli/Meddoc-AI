@@ -55,6 +55,31 @@ router.post('/templates', authenticate, requireRole(['admin','gestor']), async (
   } catch (err) { next(err) }
 })
 
+// Atualizar template
+router.put('/templates/:id', authenticate, requireRole(['admin','gestor']), async (req, res, next) => {
+  try {
+    const { name, type, specialty, structure } = req.body
+    const result = await query(
+      'UPDATE prontuario_templates SET name=$1, type=$2, specialty=$3, structure=$4 WHERE id=$5 AND clinic_id=$6 RETURNING *',
+      [name, type, specialty||null, JSON.stringify(structure), req.params.id, req.user.clinicId]
+    )
+    if (!result.rows[0]) return res.status(404).json({ error: 'Template não encontrado' })
+    res.json({ template: result.rows[0] })
+  } catch (err) { next(err) }
+})
+
+// Remover template
+router.delete('/templates/:id', authenticate, requireRole(['admin','gestor']), async (req, res, next) => {
+  try {
+    const result = await query(
+      'DELETE FROM prontuario_templates WHERE id=$1 AND clinic_id=$2 RETURNING id',
+      [req.params.id, req.user.clinicId]
+    )
+    if (!result.rows[0]) return res.status(404).json({ error: 'Template não encontrado' })
+    res.json({ message: 'Template removido' })
+  } catch (err) { next(err) }
+})
+
 // Logs de auditoria
 router.get('/audit-logs', authenticate, requireRole(['admin']), async (req, res, next) => {
   try {
