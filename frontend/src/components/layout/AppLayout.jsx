@@ -27,7 +27,7 @@ export default function AppLayout() {
             <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center">
               <Layers size={14} className="text-white" />
             </div>
-            <span className="font-bold text-gray-900 text-[15px]">MedDoc AI</span>
+            <span className="font-bold text-gray-900 text-[15px]">Pronova</span>
           </div>
         </div>
 

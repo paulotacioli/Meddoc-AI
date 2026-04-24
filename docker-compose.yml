@@ -3,12 +3,12 @@ version: '3.9'
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: meddoc_postgres
+    container_name: pronova_postgres
     command: postgres -c password_encryption=md5
     environment:
-      POSTGRES_DB: meddoc
-      POSTGRES_USER: meddoc
-      POSTGRES_PASSWORD: meddoc123
+      POSTGRES_DB: pronova
+      POSTGRES_USER: pronova
+      POSTGRES_PASSWORD: pronova123
       POSTGRES_HOST_AUTH_METHOD: trust
       
     volumes:
@@ -18,18 +18,18 @@ services:
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U meddoc"]
+      test: ["CMD-SHELL", "pg_isready -U pronova"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   mongodb:
     image: mongo:7-jammy
-    container_name: meddoc_mongo
+    container_name: pronova_mongo
     environment:
-      MONGO_INITDB_ROOT_USERNAME: meddoc
-      MONGO_INITDB_ROOT_PASSWORD: meddoc123
-      MONGO_INITDB_DATABASE: meddoc_docs
+      MONGO_INITDB_ROOT_USERNAME: pronova
+      MONGO_INITDB_ROOT_PASSWORD: pronova123
+      MONGO_INITDB_DATABASE: pronova_docs
     volumes:
       - mongo_data:/data/db
     ports:
@@ -37,8 +37,8 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: meddoc_redis
-    command: redis-server --requirepass meddoc123
+    container_name: pronova_redis
+    command: redis-server --requirepass pronova123
     volumes:
       - redis_data:/data
     ports:
@@ -48,13 +48,13 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: meddoc_backend
+    container_name: pronova_backend
     environment:
       NODE_ENV: production
       PORT: 3001
-      DATABASE_URL: postgresql://meddoc:meddoc123@postgres:5432/meddoc
-      MONGO_URL: mongodb://meddoc:meddoc123@mongodb:27017/meddoc_docs
-      REDIS_URL: redis://:meddoc123@redis:6379
+      DATABASE_URL: postgresql://pronova:pronova123@postgres:5432/pronova
+      MONGO_URL: mongodb://pronova:pronova123@mongodb:27017/pronova_docs
+      REDIS_URL: redis://:pronova123@redis:6379
       JWT_SECRET: 401914d202f5e41aac5e081f3a2c9ea166b487c0b0a43de7524181e63defae9af0499f178cf582c1ae722b4843852fbb5bd9f147c74085dba4a354af7048d2c0
       ENCRYPTION_KEY: c1963323e0e79e0d8a7dd4a4f8de77e197dfad809390374c6f29a1fce11e1bd1
       OPENAI_API_KEY: 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
@@ -84,7 +84,7 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-    container_name: meddoc_frontend
+    container_name: pronova_frontend
     environment:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:3001}
       VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:3001}
@@ -95,7 +95,7 @@ services:
 
   nginx:
     image: nginx:alpine
-    container_name: meddoc_nginx
+    container_name: pronova_nginx
     volumes:
       - ./infra/nginx.conf:/etc/nginx/nginx.conf:ro
     ports:

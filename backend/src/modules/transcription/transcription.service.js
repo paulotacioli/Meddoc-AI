@@ -16,7 +16,7 @@ async function transcribe(audioS3Key) {
     return { transcript: '', diarized: [] }
   }
 
-  const tmpPath = path.join(os.tmpdir(), `meddoc_${Date.now()}.webm`)
+  const tmpPath = path.join(os.tmpdir(), `pronova_${Date.now()}.webm`)
 
   try {
     const cmd   = new GetObjectCommand({ Bucket: process.env.AWS_S3_BUCKET, Key: audioS3Key })

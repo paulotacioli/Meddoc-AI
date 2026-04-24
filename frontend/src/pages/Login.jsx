@@ -57,14 +57,14 @@ export default function Login() {
           <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
             <Layers size={18} className="text-white" />
           </div>
-          <span className="text-xl font-bold text-gray-900">MedDoc AI</span>
+          <span className="text-xl font-bold text-gray-900">Pronova</span>
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8">
           {step === 'login' ? (
             <>
               <h1 className="text-2xl font-bold text-gray-900 mb-1">Entrar</h1>
-              <p className="text-sm text-gray-500 mb-6">Acesse sua conta MedDoc AI</p>
+              <p className="text-sm text-gray-500 mb-6">Acesse sua conta Pronova</p>
 
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>

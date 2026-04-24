@@ -1,4 +1,4 @@
-# MedDoc AI — Guia de Execução Local
+# Pronova — Guia de Execução Local
 
 ## ✅ Pré-requisitos
 
@@ -81,7 +81,7 @@ npm run dev
 
 **Resultado esperado:**
 ```
-MedDoc AI Backend na porta 3001
+Pronova Backend na porta 3001
 PostgreSQL conectado
 MongoDB conectado
 Redis conectado

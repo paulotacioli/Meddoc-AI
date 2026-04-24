@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# MedDoc AI — Script de Setup Automático
+# Pronova — Script de Setup Automático
 # Uso: bash setup.sh
 # ============================================================
 
@@ -19,7 +19,7 @@ info() { echo -e "${BLUE}→${NC} $1"; }
 
 echo ""
 echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║       MedDoc AI — Setup Inicial      ║${NC}"
+echo -e "${BLUE}║       Pronova — Setup Inicial      ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
 echo ""
 
@@ -69,7 +69,7 @@ docker-compose up postgres mongodb redis -d
 
 info "Aguardando PostgreSQL ficar pronto..."
 for i in $(seq 1 30); do
-  if docker-compose exec -T postgres pg_isready -U meddoc >/dev/null 2>&1; then
+  if docker-compose exec -T postgres pg_isready -U pronova >/dev/null 2>&1; then
     ok "PostgreSQL pronto"
     break
   fi
@@ -108,14 +108,14 @@ cd ..
 # ── 5. Verificar se o schema foi aplicado ─────────────────────
 info "Verificando schema do banco..."
 sleep 3
-TABLE_COUNT=$(docker-compose exec -T postgres psql -U meddoc -d meddoc -t -c \
+TABLE_COUNT=$(docker-compose exec -T postgres psql -U pronova -d pronova -t -c \
   "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public';" 2>/dev/null | tr -d ' ')
 
 if [ "${TABLE_COUNT:-0}" -ge 5 ]; then
   ok "Schema aplicado — ${TABLE_COUNT} tabelas encontradas"
 else
   warn "Schema pode não ter sido aplicado. Aplicando manualmente..."
-  docker-compose exec -T postgres psql -U meddoc -d meddoc -f /docker-entrypoint-initdb.d/01_schema.sql 2>/dev/null || true
+  docker-compose exec -T postgres psql -U pronova -d pronova -f /docker-entrypoint-initdb.d/01_schema.sql 2>/dev/null || true
 fi
 
 # ── 6. Resumo ─────────────────────────────────────────────────

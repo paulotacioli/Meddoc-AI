@@ -6,6 +6,8 @@ import { useAuthStore } from './store/authStore';
 import Landing        from './pages/Landing';
 import Login          from './pages/Login';
 import Onboarding     from './pages/Onboarding';
+import EsqueciSenha   from './pages/EsqueciSenha';
+import RedefinirSenha from './pages/RedefinirSenha';
 import Dashboard      from './pages/Dashboard';
 import ConsultaAtiva  from './pages/ConsultaAtiva';
 import Prontuario     from './pages/Prontuario';
@@ -40,8 +42,10 @@ export default function App() {
           {/* Públicas */}
           <Route path="/"         element={<Landing />} />
           <Route path="/login"    element={<PublicRoute><Login /></PublicRoute>} />
-          <Route path="/cadastro" element={<PublicRoute><Onboarding /></PublicRoute>} />
-          <Route path="/convite/:token" element={<Onboarding invite />} />
+          <Route path="/cadastro"        element={<PublicRoute><Onboarding /></PublicRoute>} />
+          <Route path="/convite/:token"  element={<Onboarding invite />} />
+          <Route path="/esqueci-senha"   element={<EsqueciSenha />} />
+          <Route path="/redefinir-senha" element={<RedefinirSenha />} />
 
           {/* Privadas — com layout do app */}
           <Route element={<PrivateRoute><AppLayout /></PrivateRoute>}>

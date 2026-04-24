@@ -61,7 +61,7 @@ async function bootstrap() {
     await connectRedis()
     logger.info('Redis conectado')
     const PORT = process.env.PORT || 3001
-    app.listen(PORT, () => logger.info(`MedDoc AI Backend na porta ${PORT}`))
+    app.listen(PORT, () => logger.info(`Pronova Backend na porta ${PORT}`))
     require('./jobs/audioCleanup')
   } catch (err) {
     logger.error('Falha ao inicializar:', err)

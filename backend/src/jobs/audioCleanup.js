@@ -61,8 +61,8 @@ cron.schedule('*/5 * * * *', async () => {
         const response = await axios.post(webhook.target_url, webhook.payload, {
           headers: {
             'Content-Type': 'application/json',
-            'X-MedDoc-Event': webhook.event_type,
-            'X-MedDoc-Delivery': webhook.id,
+            'X-Pronova-Event': webhook.event_type,
+            'X-Pronova-Delivery': webhook.id,
           },
           timeout: 10000,
         });

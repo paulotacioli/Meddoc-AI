@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Users, Plug, CreditCard, Shield, FileText, Loader2, Plus, Trash2, Send } from 'lucide-react';
+import { Users, Plug, CreditCard, Shield, FileText, Loader2, Plus, Trash2, Send, Mail } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../services/api';
 import { useAuthStore } from '../store/authStore';
@@ -48,19 +48,38 @@ export default function Configuracoes() {
 
 // ── USUÁRIOS ──────────────────────────────────────────────────
 function UsuariosConfig() {
+  const [inviteName,  setInviteName]  = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole]   = useState('medico');
-  const qc = useQueryClient();
+  const qc      = useQueryClient();
+  const me      = useAuthStore(s => s.user);
 
   const { data } = useQuery({
     queryKey: ['users'],
     queryFn: () => api.get('/clinics/users').then(r => r.data),
   });
 
+  const removeUser = useMutation({
+    mutationFn: (id) => api.delete(`/clinics/users/${id}`),
+    onSuccess: () => { toast.success('Usuário excluído'); qc.invalidateQueries(['users']); },
+    onError: (err) => toast.error(err.response?.data?.error || 'Erro ao excluir usuário'),
+  });
+
+  const resendCredentials = useMutation({
+    mutationFn: (id) => api.post(`/clinics/users/${id}/resend-credentials`),
+    onSuccess: () => toast.success('Credenciais reenviadas por e-mail!'),
+    onError: (err) => toast.error(err.response?.data?.error || 'Erro ao reenviar credenciais'),
+  });
+
   const invite = useMutation({
-    mutationFn: () => api.post('/auth/invite', { email: inviteEmail, role: inviteRole }),
-    onSuccess: () => { toast.success('Convite enviado!'); setInviteEmail(''); qc.invalidateQueries(['users']); },
-    onError:   () => toast.error('Erro ao enviar convite'),
+    mutationFn: () => api.post('/auth/invite', { name: inviteName, email: inviteEmail, role: inviteRole }),
+    onSuccess: () => {
+      toast.success('Usuário criado! Credenciais enviadas por e-mail.');
+      setInviteName(''); setInviteEmail('');
+      setInviteRole('medico');
+      qc.invalidateQueries(['users']);
+    },
+    onError: (err) => toast.error(err.response?.data?.error || 'Erro ao criar usuário'),
   });
 
   return (
@@ -69,13 +88,18 @@ function UsuariosConfig() {
 
       {/* Convidar */}
       <div className="bg-white rounded-xl border border-gray-100 p-5">
-        <h3 className="font-semibold text-gray-800 mb-4 text-sm">Convidar membro</h3>
-        <div className="flex gap-3">
+        <h3 className="font-semibold text-gray-800 mb-4 text-sm">Adicionar membro</h3>
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <input type="text" value={inviteName} onChange={e => setInviteName(e.target.value)}
+            placeholder="Nome completo"
+            className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
           <input type="email" value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
             placeholder="email@clinica.com"
-            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+            className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+        </div>
+        <div className="flex gap-3">
           <select value={inviteRole} onChange={e => setInviteRole(e.target.value)}
-            className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none">
+            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none">
             <option value="medico">Médico</option>
             <option value="recepcionista">Recepcionista</option>
             <option value="gestor">Gestor</option>
@@ -84,9 +108,10 @@ function UsuariosConfig() {
           <button onClick={() => invite.mutate()} disabled={!inviteEmail || invite.isPending}
             className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-50">
             {invite.isPending ? <Loader2 size={14} className="animate-spin"/> : <Send size={14}/>}
-            Convidar
+            Criar e enviar acesso
           </button>
         </div>
+        <p className="text-xs text-gray-400 mt-2">Uma senha temporária será gerada e enviada ao e-mail informado.</p>
       </div>
 
       {/* Lista */}
@@ -100,7 +125,28 @@ function UsuariosConfig() {
               <div className="font-medium text-gray-900 text-sm">{u.name}</div>
               <div className="text-xs text-gray-400">{u.email}</div>
             </div>
-            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full capitalize">{u.role}</span>
+            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full capitalize mr-3">{u.role}</span>
+            {u.id !== me?.id && (
+              <div className="flex gap-1">
+                <button
+                  onClick={() => resendCredentials.mutate(u.id)}
+                  disabled={resendCredentials.isPending}
+                  className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors disabled:opacity-50"
+                  title="Reenviar credenciais por e-mail"
+                >
+                  <Mail size={13} />
+                  Reenviar email
+                </button>
+                <button
+                  onClick={() => removeUser.mutate(u.id)}
+                  disabled={removeUser.isPending}
+                  className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                  title="Excluir usuário"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            )}
           </div>
         ))}
       </div>

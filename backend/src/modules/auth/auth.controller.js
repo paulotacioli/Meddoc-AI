@@ -4,7 +4,7 @@ const jwt          = require('jsonwebtoken')
 const speakeasy    = require('speakeasy')
 const qrcode       = require('qrcode')
 const crypto       = require('crypto')
-const { query, queryWithTenant } = require('../../config/database')
+const { query, queryWithTenant, pool } = require('../../config/database')
 const { redisClient }  = require('../../config/redis')
 const emailService = require('../../shared/email')
 const { encrypt, decrypt } = require('../../shared/crypto')
@@ -20,46 +20,55 @@ const sign = (payload, ttl) =>
 
 // ── REGISTER ─────────────────────────────────────────────────
 exports.register = async (req, res, next) => {
+  const client = await pool.connect()
   try {
     const { clinicName, cnpj, email, password, name, phone } = req.body
     if (!clinicName || !email || !password || !name)
       return res.status(400).json({ error: 'Campos obrigatórios faltando' })
 
-    const exists = await query('SELECT id FROM users WHERE email = $1', [email])
+    const exists = await client.query('SELECT id FROM users WHERE email = $1', [email])
     if (exists.rows.length)
       return res.status(409).json({ error: 'E-mail já cadastrado' })
 
-    // Criar clínica
-    const clinicRes = await query(
+    const hash = await bcrypt.hash(password, SALT_ROUNDS)
+
+    await client.query('BEGIN')
+
+    const clinicRes = await client.query(
       `INSERT INTO clinics (name, cnpj, email, phone, plan, plan_status, trial_ends_at)
        VALUES ($1,$2,$3,$4,'starter','trial', NOW() + INTERVAL '14 days') RETURNING id`,
       [clinicName, cnpj || null, email, phone || null]
     )
     const clinicId = clinicRes.rows[0].id
 
-    // Criar usuário admin
-    const hash = await bcrypt.hash(password, SALT_ROUNDS)
-    const userRes = await query(
+    const userRes = await client.query(
       `INSERT INTO users (clinic_id, email, password_hash, name, role)
        VALUES ($1,$2,$3,$4,'admin') RETURNING id, name, email, role`,
       [clinicId, email, hash, name]
     )
     const user = userRes.rows[0]
 
-    await emailService.sendWelcome({ to: email, name, clinicName }).catch(() => {})
-
     const payload      = { userId: user.id, clinicId, role: user.role }
     const accessToken  = sign(payload, ACCESS_TOKEN_TTL)
     const refreshToken = sign(payload, REFRESH_TOKEN_TTL)
+
     await redisClient.setEx(`refresh:${user.id}`, 7 * 86400, refreshToken)
 
-    await createAuditLog({ clinicId, userId: user.id, action: 'REGISTER', resource: 'users', resourceId: user.id })
+    await client.query('COMMIT')
+
+    emailService.sendWelcome({ to: email, name, clinicName }).catch(() => {})
+    createAuditLog({ clinicId, userId: user.id, action: 'REGISTER', resource: 'users', resourceId: user.id })
 
     res.status(201).json({
       accessToken, refreshToken,
       user: { ...user, clinicId, plan: 'starter', planStatus: 'trial' }
     })
-  } catch (err) { next(err) }
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    next(err)
+  } finally {
+    client.release()
+  }
 }
 
 // ── LOGIN ─────────────────────────────────────────────────────
@@ -196,7 +205,7 @@ exports.setup2FA = async (req, res, next) => {
   try {
     const userRes = await query('SELECT email FROM users WHERE id=$1', [req.user.userId])
     const email   = userRes.rows[0].email
-    const secret  = speakeasy.generateSecret({ name: `MedDoc AI (${email})`, issuer: 'MedDoc AI' })
+    const secret  = speakeasy.generateSecret({ name: `Pronova (${email})`, issuer: 'Pronova' })
     const qr      = await qrcode.toDataURL(secret.otpauth_url)
     await redisClient.setEx(`2fa_setup:${req.user.userId}`, 600, secret.base32)
     res.json({ qrCode: qr, manualKey: secret.base32 })
@@ -252,21 +261,36 @@ exports.resetPassword = async (req, res, next) => {
 // ── INVITE ────────────────────────────────────────────────────
 exports.sendInvite = async (req, res, next) => {
   try {
-    const { email, role } = req.body
-    const result = await query(
-      `INSERT INTO invites (clinic_id, email, role, invited_by)
-       VALUES ($1,$2,$3,$4) RETURNING token`,
-      [req.user.clinicId, email, role, req.user.userId]
-    )
-    const token      = result.rows[0].token
-    const acceptUrl  = `${process.env.APP_URL}/convite/${token}`
+    const { email, role, name } = req.body
+    if (!email || !role) return res.status(400).json({ error: 'E-mail e cargo são obrigatórios' })
+
+    const exists = await query('SELECT id FROM users WHERE email = $1', [email])
+    if (exists.rows.length) return res.status(409).json({ error: 'E-mail já cadastrado' })
+
     const inviterRes = await query('SELECT name FROM users WHERE id=$1', [req.user.userId])
     const clinicRes  = await query('SELECT name FROM clinics WHERE id=$1', [req.user.clinicId])
-    await emailService.sendInvite({
-      to: email, inviterName: inviterRes.rows[0].name,
-      clinicName: clinicRes.rows[0].name, acceptUrl
+
+    // Gerar senha temporária: 8 hex + sufixo fixo com maiúscula, especial e dígito
+    const tempPassword = crypto.randomBytes(4).toString('hex') + 'Kx@1'
+    const hash         = await bcrypt.hash(tempPassword, SALT_ROUNDS)
+    const userName     = name?.trim() || email.split('@')[0]
+
+    await query(
+      `INSERT INTO users (clinic_id, email, password_hash, name, role, invited_by)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [req.user.clinicId, email, hash, userName, role, req.user.userId]
+    )
+
+    emailService.sendCredentials({
+      to: email,
+      name: userName,
+      clinicName: clinicRes.rows[0].name,
+      inviterName: inviterRes.rows[0].name,
+      tempPassword,
+      loginUrl: `${process.env.APP_URL}/login`,
     }).catch(() => {})
-    res.json({ message: 'Convite enviado' })
+
+    res.json({ message: 'Usuário criado e credenciais enviadas por e-mail' })
   } catch (err) { next(err) }
 }
 

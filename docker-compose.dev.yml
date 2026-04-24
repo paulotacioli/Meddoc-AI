@@ -8,18 +8,18 @@ version: '3.9'
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: meddoc_postgres
+    container_name: pronova_postgres
     environment:
-      POSTGRES_DB:       meddoc
-      POSTGRES_USER:     meddoc
-      POSTGRES_PASSWORD: meddoc123
+      POSTGRES_DB:       pronova
+      POSTGRES_USER:     pronova
+      POSTGRES_PASSWORD: pronova123
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U meddoc"]
+      test: ["CMD-SHELL", "pg_isready -U pronova"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -27,11 +27,11 @@ services:
 
   mongodb:
     image: mongo:7-jammy
-    container_name: meddoc_mongo
+    container_name: pronova_mongo
     environment:
-      MONGO_INITDB_ROOT_USERNAME: meddoc
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-meddoc123}
-      MONGO_INITDB_DATABASE:      meddoc_docs
+      MONGO_INITDB_ROOT_USERNAME: pronova
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-pronova123}
+      MONGO_INITDB_DATABASE:      pronova_docs
     volumes:
       - mongo_data:/data/db
     ports:
@@ -40,8 +40,8 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: meddoc_redis
-    command: redis-server --requirepass ${REDIS_PASSWORD:-meddoc123}
+    container_name: pronova_redis
+    command: redis-server --requirepass ${REDIS_PASSWORD:-pronova123}
     volumes:
       - redis_data:/data
     ports:

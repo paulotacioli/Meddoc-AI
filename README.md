@@ -1,4 +1,4 @@
-# MedDoc AI — Full-Stack SaaS
+# Pronova — Full-Stack SaaS
 
 ## Estrutura do Projeto
 

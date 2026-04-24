@@ -63,7 +63,7 @@ const emailService = {
   async sendWelcome({ to, name, clinicName }) {
     await sgMail.send({
       to, from: { email: process.env.SENDGRID_FROM_EMAIL, name: process.env.SENDGRID_FROM_NAME },
-      subject: 'Bem-vindo ao MedDoc AI!',
+      subject: 'Bem-vindo ao Pronova!',
       html: `<h2>Olá, ${name}!</h2>
              <p>Sua clínica <strong>${clinicName}</strong> foi criada com sucesso.</p>
              <p>Você tem <strong>14 dias de trial gratuito</strong>.</p>
@@ -76,8 +76,8 @@ const emailService = {
   async sendInvite({ to, inviterName, clinicName, acceptUrl }) {
     await sgMail.send({
       to, from: { email: process.env.SENDGRID_FROM_EMAIL, name: process.env.SENDGRID_FROM_NAME },
-      subject: `${inviterName} te convidou para o MedDoc AI`,
-      html: `<p><strong>${inviterName}</strong> te convidou para a clínica <strong>${clinicName}</strong> no MedDoc AI.</p>
+      subject: `${inviterName} te convidou para o Pronova`,
+      html: `<p><strong>${inviterName}</strong> te convidou para a clínica <strong>${clinicName}</strong> no Pronova.</p>
              <a href="${acceptUrl}" style="background:#1A56A0;color:white;padding:12px 24px;text-decoration:none;border-radius:8px">
                Aceitar convite
              </a>
@@ -88,7 +88,7 @@ const emailService = {
   async sendPasswordReset({ to, resetUrl }) {
     await sgMail.send({
       to, from: { email: process.env.SENDGRID_FROM_EMAIL, name: process.env.SENDGRID_FROM_NAME },
-      subject: 'Redefinição de senha — MedDoc AI',
+      subject: 'Redefinição de senha — Pronova',
       html: `<p>Você solicitou a redefinição da sua senha.</p>
              <a href="${resetUrl}" style="background:#1A56A0;color:white;padding:12px 24px;text-decoration:none;border-radius:8px">
                Redefinir senha

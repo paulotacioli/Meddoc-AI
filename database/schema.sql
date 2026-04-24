@@ -1,5 +1,5 @@
 -- ============================================================
--- MedDoc AI — Schema PostgreSQL Completo
+-- Pronova — Schema PostgreSQL Completo
 -- LGPD: Row-Level Security por tenant (clinica)
 -- ============================================================
 

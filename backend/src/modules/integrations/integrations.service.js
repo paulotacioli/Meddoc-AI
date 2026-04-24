@@ -86,7 +86,15 @@ async function syncToHIS({ consultationId, clinicId, prontuario }) {
   if (!integConfig.rows.length) return; // Sem integração configurada
 
   const config = integConfig.rows[0];
-  const apiKey = decrypt(config.api_key_enc);
+
+  // Validate required URL before attempting sync
+  const effectiveUrl = config.fhir_server || config.base_url;
+  if (!effectiveUrl) {
+    logger.warn(`HIS sync ignorado: clínica ${clinicId} sem URL configurada`);
+    return;
+  }
+
+  const apiKey = config.api_key_enc ? decrypt(config.api_key_enc) : '';
 
   const consultation = (await queryWithTenant(clinicId,
     `SELECT c.*, p.name AS patient_name, p.fhir_patient_id,
@@ -152,34 +160,62 @@ async function syncFHIR({ config, consultation, prontuario, apiKey }) {
 }
 
 async function syncTasy({ config, consultation, prontuario, apiKey }) {
-  // Tasy usa REST proprietário — adaptar conforme versão da API do cliente
   const headers = { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' };
 
+  // Fall back to local IDs when HIS-specific IDs haven't been mapped yet
+  const encounterId = consultation.his_encounter_id || consultation.id;
+  const patientId   = consultation.his_patient_id   || consultation.patient_id;
+  if (!consultation.his_encounter_id) {
+    logger.warn(`Tasy sync: his_encounter_id ausente para consulta ${consultation.id}, usando ID local`);
+  }
+
   const payload = {
-    codigoAtendimento: consultation.his_encounter_id,
-    codigoPaciente:    consultation.his_patient_id,
+    codigoAtendimento: encounterId,
+    codigoPaciente:    patientId,
     dataAtendimento:   consultation.started_at,
     tipoProntuario:    prontuario.templateType,
     conteudo:          prontuario.fields,
     diagnostico:       prontuario.cid10?.[0]?.code,
   };
 
-  await axios.post(`${config.base_url}/api/prontuario`, payload, { headers });
+  const response = await axios.post(`${config.base_url}/api/prontuario`, payload, { headers });
+
+  // Persist the HIS encounter ID returned by Tasy for future syncs
+  const returnedId = response.data?.codigoAtendimento || response.data?.id;
+  if (returnedId && !consultation.his_encounter_id) {
+    await query(
+      'UPDATE consultations SET his_encounter_id=$1 WHERE id=$2',
+      [String(returnedId), consultation.id]
+    );
+  }
 }
 
 async function syncMV({ config, consultation, prontuario, apiKey }) {
-  // MV Soul MV — API proprietária
   const headers = { 'x-api-key': apiKey, 'Content-Type': 'application/json' };
 
+  const encounterId = consultation.his_encounter_id || consultation.id;
+  const patientId   = consultation.his_patient_id   || consultation.patient_id;
+  if (!consultation.his_encounter_id) {
+    logger.warn(`MV sync: his_encounter_id ausente para consulta ${consultation.id}, usando ID local`);
+  }
+
   const payload = {
-    idConsulta:  consultation.his_encounter_id,
-    idPaciente:  consultation.his_patient_id,
+    idConsulta:  encounterId,
+    idPaciente:  patientId,
     dataHora:    consultation.started_at,
     texto:       Object.entries(prontuario.fields).map(([k,v]) => `${k}: ${v}`).join('\n'),
     cid:         prontuario.cid10?.[0]?.code,
   };
 
-  await axios.post(`${config.base_url}/mv/prontuario/inserir`, payload, { headers });
+  const response = await axios.post(`${config.base_url}/mv/prontuario/inserir`, payload, { headers });
+
+  const returnedId = response.data?.idConsulta || response.data?.id;
+  if (returnedId && !consultation.his_encounter_id) {
+    await query(
+      'UPDATE consultations SET his_encounter_id=$1 WHERE id=$2',
+      [String(returnedId), consultation.id]
+    );
+  }
 }
 
 async function syncGenericREST({ config, consultation, prontuario, apiKey }) {

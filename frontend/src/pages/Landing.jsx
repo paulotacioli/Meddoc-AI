@@ -17,7 +17,7 @@ export default function Landing() {
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
               <Layers size={16} className="text-white" />
             </div>
-            <span className="font-bold text-gray-900 text-lg">MedDoc AI</span>
+            <span className="font-bold text-gray-900 text-lg">Pronova</span>
           </div>
           <div className="flex items-center gap-4">
             <Link to="/login" className="text-sm font-medium text-gray-600 hover:text-gray-900">
@@ -47,7 +47,7 @@ export default function Landing() {
           </h1>
 
           <p className="text-xl text-gray-500 max-w-2xl mx-auto mb-10 leading-relaxed">
-            O MedDoc AI transcreve sua consulta e gera o prontuário completo
+            O Pronova transcreve sua consulta e gera o prontuário completo
             em segundos — automaticamente, no formato que você prefere.
           </p>
 
@@ -97,7 +97,7 @@ export default function Landing() {
           <h2 className="text-4xl font-bold text-gray-900 mb-14">Três passos. Zero digitação.</h2>
           <div className="grid md:grid-cols-3 gap-8">
             {[
-              { icon: Mic,      step: '1', title: 'Inicie a consulta',    desc: 'Um clique no botão Iniciar. O MedDoc AI começa a escutar e transcrever em tempo real.' },
+              { icon: Mic,      step: '1', title: 'Inicie a consulta',    desc: 'Um clique no botão Iniciar. O Pronova começa a escutar e transcrever em tempo real.' },
               { icon: Mic,      step: '2', title: 'Consulte normalmente', desc: 'Fale com seu paciente como sempre fez. A IA transcreve e organiza as informações clinicamente.' },
               { icon: FileText, step: '3', title: 'Aprove o prontuário',  desc: 'Revise o documento gerado, edite se necessário e aprove. Sincronizado com seu HIS.' },
             ].map(({ icon: Icon, step, title, desc }) => (
@@ -185,7 +185,7 @@ export default function Landing() {
                     </li>
                   ))}
                 </ul>
-                <Link to={p.primary ? '/cadastro' : p.name === 'Enterprise' ? 'mailto:vendas@meddoc.ai' : '/cadastro'}
+                <Link to={p.primary ? '/cadastro' : p.name === 'Enterprise' ? 'mailto:vendas@pronova.ai' : '/cadastro'}
                   className={`block w-full text-center py-3 rounded-xl font-semibold text-sm transition-colors ${
                     p.primary
                       ? 'bg-blue-600 hover:bg-blue-700 text-white'
@@ -224,10 +224,10 @@ export default function Landing() {
             <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center">
               <Layers size={14} className="text-white" />
             </div>
-            <span className="font-bold text-white">MedDoc AI</span>
+            <span className="font-bold text-white">Pronova</span>
           </div>
           <p className="text-gray-500 text-sm">
-            © 2026 MedDoc AI · LGPD Compliant · Dados armazenados no Brasil
+            © 2026 Pronova · LGPD Compliant · Dados armazenados no Brasil
           </p>
         </div>
       </footer>

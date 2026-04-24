@@ -32,6 +32,54 @@ router.get('/users', authenticate, async (req, res, next) => {
   } catch (err) { next(err) }
 })
 
+// Reenviar credenciais de acesso
+router.post('/users/:id/resend-credentials', authenticate, requireRole(['admin','gestor']), async (req, res, next) => {
+  try {
+    const userRes = await query(
+      'SELECT id, name, email FROM users WHERE id=$1 AND clinic_id=$2',
+      [req.params.id, req.user.clinicId]
+    )
+    if (!userRes.rows[0]) return res.status(404).json({ error: 'Usuário não encontrado' })
+    const target = userRes.rows[0]
+
+    const bcrypt     = require('bcryptjs')
+    const emailSvc   = require('../../shared/email')
+    const clinicRes  = await query('SELECT name FROM clinics WHERE id=$1', [req.user.clinicId])
+    const inviterRes = await query('SELECT name FROM users WHERE id=$1', [req.user.userId])
+
+    const tempPassword = require('crypto').randomBytes(4).toString('hex') + 'Kx@1'
+    const hash         = await bcrypt.hash(tempPassword, 12)
+
+    await query('UPDATE users SET password_hash=$1 WHERE id=$2', [hash, target.id])
+
+    emailSvc.sendCredentials({
+      to:          target.email,
+      name:        target.name,
+      clinicName:  clinicRes.rows[0].name,
+      inviterName: inviterRes.rows[0].name,
+      tempPassword,
+      loginUrl: `${process.env.APP_URL}/login`,
+    }).catch(() => {})
+
+    res.json({ message: 'Credenciais reenviadas' })
+  } catch (err) { next(err) }
+})
+
+// Excluir usuário da clínica
+router.delete('/users/:id', authenticate, requireRole(['admin','gestor']), async (req, res, next) => {
+  try {
+    if (req.params.id === req.user.userId)
+      return res.status(400).json({ error: 'Você não pode excluir seu próprio usuário' })
+
+    const result = await query(
+      'DELETE FROM users WHERE id=$1 AND clinic_id=$2 RETURNING id',
+      [req.params.id, req.user.clinicId]
+    )
+    if (!result.rows[0]) return res.status(404).json({ error: 'Usuário não encontrado' })
+    res.json({ message: 'Usuário excluído' })
+  } catch (err) { next(err) }
+})
+
 // Templates de prontuário disponíveis para a clínica
 router.get('/templates', authenticate, async (req, res, next) => {
   try {

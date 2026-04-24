@@ -6,7 +6,7 @@ async function connectRedis() {
   _redisClient = new Redis({
     host: '127.0.0.1',
     port: 6379,
-    password: 'meddoc123',
+    password: 'pronova123',
     lazyConnect: true,
   })
   _redisClient.on('error', (err) => console.error('Redis error:', err.message))

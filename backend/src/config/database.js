@@ -2,20 +2,20 @@ const { Pool } = require('pg');
 const mongoose = require('mongoose');
 const logger = require('../shared/logger');
 
-process.env.PGPASSWORD = 'meddoc123';
+process.env.PGPASSWORD = 'pronova123';
 
-process.env.PGPASSWORD    = 'meddoc123';
-process.env.PGUSER        = 'meddoc';
-process.env.PGDATABASE    = 'meddoc';
+process.env.PGPASSWORD    = 'pronova123';
+process.env.PGUSER        = 'pronova';
+process.env.PGDATABASE    = 'pronova';
 process.env.PGHOST        = 'localhost';
 process.env.PGPORT        = '5432';
 // ── POSTGRESQL ───────────────────────────────────────────────
 const pool = new Pool({
   host:     '127.0.0.1',
   port:     5432,
-  database: 'meddoc',
-  user:     'meddoc',
-  password: 'meddoc123',
+  database: 'pronova',
+  user:     'pronova',
+  password: 'pronova123',
   max:      20,
   idleTimeoutMillis:       30000,
   connectionTimeoutMillis: 5000,
